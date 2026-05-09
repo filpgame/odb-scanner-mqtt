@@ -8,6 +8,9 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -33,9 +36,22 @@ fun SettingsScreen(
     val deviceModel by settings.deviceModel.collectAsState(initial = "Jaecoo 7")
     val deviceManufacturer by settings.deviceManufacturer.collectAsState(initial = "Jaecoo")
 
-    @Suppress("DEPRECATION")
-    val pairedDevices: List<BluetoothDevice> = remember {
-        BluetoothAdapter.getDefaultAdapter()?.bondedDevices?.toList() ?: emptyList()
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    var pairedDevices by remember { mutableStateOf(emptyList<BluetoothDevice>()) }
+
+    androidx.compose.runtime.DisposableEffect(lifecycleOwner) {
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
+                pairedDevices = try {
+                    @Suppress("DEPRECATION")
+                    BluetoothAdapter.getDefaultAdapter()?.bondedDevices?.toList() ?: emptyList()
+                } catch (_: SecurityException) {
+                    emptyList()
+                }
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
     Scaffold(

@@ -22,8 +22,6 @@ import com.frodrigues.jaecoo.settings.AppSettings
 import com.frodrigues.jaecoo.settings.dataStore
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
 
 enum class ServiceStatus { IDLE, CONNECTING, CONNECTED, RECONNECTING }
 
@@ -34,15 +32,6 @@ class OBDCollectorService : LifecycleService() {
     }
 
     private val binder = LocalBinder()
-
-    private val _status = MutableStateFlow(ServiceStatus.IDLE)
-    val status: StateFlow<ServiceStatus> = _status.asStateFlow()
-
-    private val _activePidCount = MutableStateFlow(0)
-    val activePidCount: StateFlow<Int> = _activePidCount.asStateFlow()
-
-    private val _lastUpdateTime = MutableStateFlow(0L)
-    val lastUpdateTime: StateFlow<Long> = _lastUpdateTime.asStateFlow()
 
     private lateinit var settings: AppSettings
     private var collectorJob: Job? = null
@@ -89,7 +78,7 @@ class OBDCollectorService : LifecycleService() {
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                _status.value = ServiceStatus.RECONNECTING
+                status.value = ServiceStatus.RECONNECTING
                 val delay = backoffMs.getOrElse(attempt) { 60_000L }
                 attempt = minOf(attempt + 1, backoffMs.lastIndex)
                 updateNotification("Reconnecting in ${delay / 1000}s...")
@@ -103,7 +92,7 @@ class OBDCollectorService : LifecycleService() {
         if (config.btDeviceMac.isBlank()) throw IllegalStateException("No BT device configured")
         if (config.mqttHost.isBlank()) throw IllegalStateException("No MQTT host configured")
 
-        _status.value = ServiceStatus.CONNECTING
+        status.value = ServiceStatus.CONNECTING
         updateNotification("Connecting to Bluetooth...")
 
         @Suppress("DEPRECATION")
@@ -121,7 +110,7 @@ class OBDCollectorService : LifecycleService() {
 
             updateNotification("Scanning supported PIDs...")
             val supportedPids = PidScanner(executor).scan()
-            _activePidCount.value = supportedPids.size
+            activePidCount.value = supportedPids.size
 
             updateNotification("Connecting to MQTT...")
             val mqttPublisher = MqttPublisher(config)
@@ -138,14 +127,14 @@ class OBDCollectorService : LifecycleService() {
                 config = config
             ).publishDiscovery(supportedPids, mac)
 
-            _status.value = ServiceStatus.CONNECTED
+            status.value = ServiceStatus.CONNECTED
             updateNotification("Connected — ${supportedPids.size} PIDs")
 
             PidPoller(executor, supportedPids, config.pollIntervalSeconds).readings().collect { reading ->
                 val pidHex = reading.pid.toString(16).padStart(2, '0').uppercase()
                 val value = reading.value.toBigDecimal().stripTrailingZeros().toPlainString()
                 mqttPublisher.publish("obd2/$mac/$pidHex/state", value, retain = true)
-                _lastUpdateTime.value = reading.timestamp
+                lastUpdateTime.value = reading.timestamp
             }
         } finally {
             publishUnavailable()
@@ -159,7 +148,7 @@ class OBDCollectorService : LifecycleService() {
         val job = collectorJob ?: return
         collectorJob = null
         job.invokeOnCompletion {
-            _status.value = ServiceStatus.IDLE
+            status.value = ServiceStatus.IDLE
         }
         job.cancel()
         stopForeground(STOP_FOREGROUND_REMOVE)
@@ -207,5 +196,9 @@ class OBDCollectorService : LifecycleService() {
         const val ACTION_STOP = "com.frodrigues.jaecoo.STOP"
         const val NOTIFICATION_ID = 1
         const val CHANNEL_ID = "obd_collector"
+
+        val status = MutableStateFlow(ServiceStatus.IDLE)
+        val activePidCount = MutableStateFlow(0)
+        val lastUpdateTime = MutableStateFlow(0L)
     }
 }
