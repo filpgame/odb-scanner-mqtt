@@ -20,7 +20,11 @@ class HaDiscoveryPublisher(
     }
 
     private fun String.jsonEscape(): String =
-        replace("\\", "\\\\").replace("\"", "\\\"")
+        replace("\\", "\\\\")
+            .replace("\"", "\\\"")
+            .replace("\n", "\\n")
+            .replace("\r", "\\r")
+            .replace("\t", "\\t")
 
     private fun jsonString(value: String): String = "\"${value.jsonEscape()}\""
 

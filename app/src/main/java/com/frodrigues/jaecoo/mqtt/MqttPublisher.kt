@@ -9,19 +9,17 @@ import kotlinx.coroutines.withContext
 
 class MqttPublisher(private val config: AppConfig) {
 
-    private lateinit var client: Mqtt3AsyncClient
+    @Volatile private var client: Mqtt3AsyncClient? = null
 
     suspend fun connect() = withContext(Dispatchers.IO) {
-        val builder = MqttClient.builder()
+        val newClient = MqttClient.builder()
             .useMqttVersion3()
             .identifier(config.mqttClientId)
             .serverHost(config.mqttHost)
             .serverPort(config.mqttPort)
             .buildAsync()
 
-        client = builder
-
-        val connectBuilder = client.connectWith()
+        val connectBuilder = newClient.connectWith()
         if (config.mqttUser.isNotBlank()) {
             connectBuilder
                 .simpleAuth()
@@ -29,12 +27,14 @@ class MqttPublisher(private val config: AppConfig) {
                 .password(config.mqttPassword.toByteArray(Charsets.UTF_8))
                 .applySimpleAuth()
         }
-        connectBuilder.send().get()
+        connectBuilder.send().get()  // throws if connection fails
+        client = newClient           // only assigned on success
     }
 
     suspend fun publish(topic: String, payload: String, retain: Boolean = false) =
         withContext(Dispatchers.IO) {
-            client.publishWith()
+            val c = client ?: throw IllegalStateException("Not connected")
+            c.publishWith()
                 .topic(topic)
                 .payload(payload.toByteArray(Charsets.UTF_8))
                 .qos(MqttQos.AT_LEAST_ONCE)
@@ -44,14 +44,17 @@ class MqttPublisher(private val config: AppConfig) {
         }
 
     suspend fun publishEmpty(topic: String) = withContext(Dispatchers.IO) {
-        client.publishWith()
+        val c = client ?: return@withContext
+        c.publishWith()
             .topic(topic)
+            .qos(MqttQos.AT_LEAST_ONCE)
             .retain(true)
             .send()
             .get()
     }
 
     suspend fun disconnect() = withContext(Dispatchers.IO) {
-        runCatching { client.disconnect().get() }
+        runCatching { client?.disconnect()?.get() }
+        client = null
     }
 }
