@@ -7,6 +7,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
 import java.io.IOException
 import java.io.InputStream
 import java.io.OutputStream
@@ -38,12 +39,14 @@ class ClassicTransport(private val device: BluetoothDevice) : BluetoothTransport
         outputStream = null
     }
 
-    override suspend fun sendCommand(command: String): String = withContext(Dispatchers.IO) {
-        val out = outputStream ?: throw IOException("Not connected")
-        val inp = inputStream ?: throw IOException("Not connected")
-        out.write("$command\r".toByteArray(Charsets.UTF_8))
-        out.flush()
-        readUntilPrompt(inp)
+    override suspend fun sendCommand(command: String): String = withTimeout(5_000) {
+        withContext(Dispatchers.IO) {
+            val out = outputStream ?: throw IOException("Not connected")
+            val inp = inputStream ?: throw IOException("Not connected")
+            out.write("$command\r".toByteArray(Charsets.UTF_8))
+            out.flush()
+            readUntilPrompt(inp)
+        }
     }
 
     private fun readUntilPrompt(inp: InputStream): String {

@@ -27,7 +27,7 @@ class BleTransport(
     private var gatt: BluetoothGatt? = null
     private val responseChannel = Channel<String>(Channel.BUFFERED)
     private val responseBuffer = StringBuilder()
-    private val connectLatch = CompletableDeferred<Unit>()
+    private var connectLatch = CompletableDeferred<Unit>()
 
     private val gattCallback = object : BluetoothGattCallback() {
 
@@ -55,11 +55,20 @@ class BleTransport(
             }
             gatt.setCharacteristicNotification(notifyChar, true)
             val descriptor = notifyChar.getDescriptor(cccdUUID)
-            descriptor?.let {
-                gatt.writeDescriptor(it, BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE)
+            if (descriptor == null) {
+                connectLatch.completeExceptionally(IOException("CCCD descriptor not found"))
+                return
             }
-            _isConnected.value = true
-            connectLatch.complete(Unit)
+            gatt.writeDescriptor(descriptor, BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE)
+        }
+
+        override fun onDescriptorWrite(gatt: BluetoothGatt, descriptor: BluetoothGattDescriptor, status: Int) {
+            if (status == BluetoothGatt.GATT_SUCCESS) {
+                _isConnected.value = true
+                connectLatch.complete(Unit)
+            } else {
+                connectLatch.completeExceptionally(IOException("CCCD write failed: $status"))
+            }
         }
 
         override fun onCharacteristicChanged(
@@ -72,12 +81,17 @@ class BleTransport(
             if (responseBuffer.contains('>')) {
                 val response = responseBuffer.toString().substringBefore('>').trim()
                 responseBuffer.clear()
-                responseChannel.trySend(response)
+                val sent = responseChannel.trySend(response)
+                if (sent.isFailure) {
+                    // channel full — response dropped, sendCommand will timeout
+                    android.util.Log.w("BleTransport", "Response dropped (channel full): $response")
+                }
             }
         }
     }
 
     override suspend fun connect() {
+        connectLatch = CompletableDeferred()
         gatt = device.connectGatt(context, false, gattCallback, BluetoothDevice.TRANSPORT_LE)
         withTimeout(10_000) { connectLatch.await() }
     }
