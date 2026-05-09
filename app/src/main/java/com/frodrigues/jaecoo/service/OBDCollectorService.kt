@@ -47,7 +47,7 @@ class OBDCollectorService : LifecycleService() {
     private lateinit var settings: AppSettings
     private var collectorJob: Job? = null
     private var currentStateTopics: List<String> = emptyList()
-    private var mqttPublisherRef: MqttPublisher? = null
+    @Volatile private var mqttPublisherRef: MqttPublisher? = null
 
     override fun onCreate() {
         super.onCreate()
@@ -63,7 +63,7 @@ class OBDCollectorService : LifecycleService() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         super.onStartCommand(intent, flags, startId)
         when (intent?.action) {
-            ACTION_START -> startCollection()
+            ACTION_START, null -> startCollection()
             ACTION_STOP -> stopCollection()
         }
         return START_STICKY
@@ -156,9 +156,12 @@ class OBDCollectorService : LifecycleService() {
     }
 
     private fun stopCollection() {
-        collectorJob?.cancel()
+        val job = collectorJob ?: return
         collectorJob = null
-        _status.value = ServiceStatus.IDLE
+        job.invokeOnCompletion {
+            _status.value = ServiceStatus.IDLE
+        }
+        job.cancel()
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()
     }
