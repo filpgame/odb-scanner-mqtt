@@ -360,49 +360,33 @@ fun SettingsScreen(
             SettingsSection(header = { SectionLabel("Polling") }) {
                 Column(
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "Update interval",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                        Surface(
-                            shape = MaterialTheme.shapes.small,
-                            color = MaterialTheme.colorScheme.primaryContainer
-                        ) {
-                            Text(
-                                text = "${pollInterval}s",
-                                style = MaterialTheme.typography.labelLarge,
-                                color = MaterialTheme.colorScheme.onPrimaryContainer,
-                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
-                            )
-                        }
-                    }
-                    Slider(
-                        value = pollInterval.toFloat(),
-                        onValueChange = { v ->
-                            scope.launch {
-                                settings.update { this[AppSettings.POLL_INTERVAL_SECONDS] = v.toInt() }
-                            }
-                        },
-                        valueRange = 1f..60f,
-                        steps = 58,
-                        modifier = Modifier.fillMaxWidth()
+                    Text(
+                        text = "Update interval",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurface
                     )
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Text("1s", style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Text("60s", style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    val pollOptions = listOf(1, 5, 10, 30, 60)
+                    SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                        pollOptions.forEachIndexed { index, seconds ->
+                            SegmentedButton(
+                                selected = pollInterval == seconds,
+                                onClick = {
+                                    scope.launch {
+                                        settings.update {
+                                            this[AppSettings.POLL_INTERVAL_SECONDS] = seconds
+                                        }
+                                    }
+                                },
+                                shape = SegmentedButtonDefaults.itemShape(
+                                    index = index,
+                                    count = pollOptions.size
+                                )
+                            ) {
+                                Text("${seconds}s")
+                            }
+                        }
                     }
                 }
             }
