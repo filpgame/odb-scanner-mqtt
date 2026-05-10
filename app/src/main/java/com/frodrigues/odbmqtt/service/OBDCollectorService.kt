@@ -24,6 +24,7 @@ import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 
 enum class ServiceStatus { IDLE, CONNECTING, CONNECTED, RECONNECTING }
+enum class ConnectionStatus { DISCONNECTED, CONNECTING, CONNECTED }
 
 class OBDCollectorService : LifecycleService() {
 
@@ -43,6 +44,9 @@ class OBDCollectorService : LifecycleService() {
         status.value = ServiceStatus.IDLE
         activePidCount.value = 0
         lastUpdateTime.value = 0L
+        btStatus.value = ConnectionStatus.DISCONNECTED
+        mqttStatus.value = ConnectionStatus.DISCONNECTED
+        pidReadings.value = emptyMap()
         settings = AppSettings(applicationContext.dataStore)
         createNotificationChannel()
     }
@@ -82,6 +86,8 @@ class OBDCollectorService : LifecycleService() {
                 throw e
             } catch (e: Exception) {
                 status.value = ServiceStatus.RECONNECTING
+                btStatus.value = ConnectionStatus.DISCONNECTED
+                mqttStatus.value = ConnectionStatus.DISCONNECTED
                 val delay = backoffMs.getOrElse(attempt) { 60_000L }
                 attempt = minOf(attempt + 1, backoffMs.lastIndex)
                 updateNotification("Reconnecting in ${delay / 1000}s...")
@@ -96,6 +102,7 @@ class OBDCollectorService : LifecycleService() {
         if (config.mqttHost.isBlank()) throw IllegalStateException("No MQTT host configured")
 
         status.value = ServiceStatus.CONNECTING
+        btStatus.value = ConnectionStatus.CONNECTING
         updateNotification("Connecting to Bluetooth...")
 
         val bluetoothAdapter = getSystemService(BluetoothManager::class.java)?.adapter
@@ -113,10 +120,13 @@ class OBDCollectorService : LifecycleService() {
             updateNotification("Scanning supported PIDs...")
             val supportedPids = PidScanner(executor).scan()
             activePidCount.value = supportedPids.size
+            btStatus.value = ConnectionStatus.CONNECTED
 
+            mqttStatus.value = ConnectionStatus.CONNECTING
             updateNotification("Connecting to MQTT...")
             val mqttPublisher = MqttPublisher(config)
             mqttPublisher.connect()
+            mqttStatus.value = ConnectionStatus.CONNECTED
             mqttPublisherRef = mqttPublisher
 
             val mac = device.address.replace(":", "")
@@ -132,7 +142,12 @@ class OBDCollectorService : LifecycleService() {
             status.value = ServiceStatus.CONNECTED
             updateNotification("Connected — ${supportedPids.size} PIDs")
 
+            val currentReadings = mutableMapOf<Int, Double>()
+
             PidPoller(executor, supportedPids, config.pollIntervalSeconds).readings().collect { reading ->
+                currentReadings[reading.pid] = reading.value
+                pidReadings.value = currentReadings.toMap()
+
                 val pidHex = reading.pid.toString(16).padStart(2, '0').uppercase()
                 val value = reading.value.toBigDecimal().stripTrailingZeros().toPlainString()
                 mqttPublisher.publish("obd2/$mac/$pidHex/state", value, retain = true)
@@ -143,6 +158,9 @@ class OBDCollectorService : LifecycleService() {
             mqttPublisherRef?.disconnect()
             mqttPublisherRef = null
             transport.disconnect()
+            btStatus.value = ConnectionStatus.DISCONNECTED
+            mqttStatus.value = ConnectionStatus.DISCONNECTED
+            pidReadings.value = emptyMap()
         }
     }
 
@@ -151,6 +169,9 @@ class OBDCollectorService : LifecycleService() {
         collectorJob = null
         job.invokeOnCompletion {
             status.value = ServiceStatus.IDLE
+            btStatus.value = ConnectionStatus.DISCONNECTED
+            mqttStatus.value = ConnectionStatus.DISCONNECTED
+            pidReadings.value = emptyMap()
         }
         job.cancel()
         stopForeground(STOP_FOREGROUND_REMOVE)
@@ -202,5 +223,8 @@ class OBDCollectorService : LifecycleService() {
         val status = MutableStateFlow(ServiceStatus.IDLE)
         val activePidCount = MutableStateFlow(0)
         val lastUpdateTime = MutableStateFlow(0L)
+        val btStatus = MutableStateFlow(ConnectionStatus.DISCONNECTED)
+        val mqttStatus = MutableStateFlow(ConnectionStatus.DISCONNECTED)
+        val pidReadings = MutableStateFlow<Map<Int, Double>>(emptyMap())
     }
 }

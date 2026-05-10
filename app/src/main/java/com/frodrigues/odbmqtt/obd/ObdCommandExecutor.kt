@@ -13,7 +13,7 @@ class ObdCommandExecutor(private val transport: BluetoothTransport) {
             !atzResponse.contains("OK", ignoreCase = true)) {
             throw IOException("ELM327 not detected. Got: $atzResponse")
         }
-        transport.sendCommand("ATE0")
+        transport.sendCommand("ATE0")   
         transport.sendCommand("ATL0")
         transport.sendCommand("ATH1")
         transport.sendCommand("ATSP6")
