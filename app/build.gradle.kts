@@ -3,6 +3,32 @@ plugins {
     alias(libs.plugins.kotlin.compose)
 }
 
+// ── Versioning ────────────────────────────────────────────────────────────────
+// versionCode : GITHUB_RUN_NUMBER (auto-incrementing integer); local fallback = 1
+// versionName : tag build → "1.2.3" (v-prefix stripped)
+//               CI non-tag → "0.0.0-<sha7>"
+//               local      → "0.0.0-<gitSha7>"
+fun gitShortSha(): String = try {
+    ProcessBuilder("git", "rev-parse", "--short", "HEAD")
+        .redirectErrorStream(true)
+        .start()
+        .inputStream.bufferedReader().readLine()?.trim() ?: "unknown"
+} catch (_: Exception) { "unknown" }
+
+val ciRunNumber   = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull()
+val ciRefType     = System.getenv("GITHUB_REF_TYPE")          // "tag" | "branch" | null
+val ciRefName     = System.getenv("GITHUB_REF_NAME")          // "v1.2.3" | branch name | null
+val ciSha         = System.getenv("GITHUB_SHA")?.take(7)
+
+val appVersionCode = ciRunNumber ?: 1
+
+val appVersionName = when {
+    ciRefType == "tag" && ciRefName != null -> ciRefName.removePrefix("v")
+    ciRunNumber != null                     -> "0.0.0-${ciSha ?: gitShortSha()}"
+    else                                    -> "0.0.0-${gitShortSha()}"
+}
+// ─────────────────────────────────────────────────────────────────────────────
+
 android {
     namespace = "com.frodrigues.jaecoo"
     compileSdk {
@@ -15,8 +41,8 @@ android {
         applicationId = "com.frodrigues.jaecoo"
         minSdk = 33
         targetSdk = 36
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = appVersionCode
+        versionName = appVersionName
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
