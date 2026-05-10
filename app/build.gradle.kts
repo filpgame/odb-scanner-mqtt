@@ -30,7 +30,7 @@ val appVersionName = when {
 // ─────────────────────────────────────────────────────────────────────────────
 
 android {
-    namespace = "com.frodrigues.jaecoo"
+    namespace = "com.frodrigues.odbmqtt"
     compileSdk {
         version = release(36) {
             minorApiLevel = 1
@@ -38,7 +38,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.frodrigues.jaecoo"
+        applicationId = "com.frodrigues.odbmqtt"
         minSdk = 33
         targetSdk = 36
         versionCode = appVersionCode
