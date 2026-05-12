@@ -17,9 +17,12 @@ class Mode22Scanner(
     private val settings: AppSettings,
     private val onProgress: suspend (scanned: Int, total: Int) -> Unit = { _, _ -> }
 ) {
-    // Ranges to brute-force — add more as needed
+    // Ranges to brute-force.
+    // NOTE (Jaecoo 7 findings):
+    //   0x0001-0x00FF → all UNABLE TO CONNECT on engine ECU (0x7E8)
+    //   0xF400-0xF4FF → SAE J2190 extended — mirrors Mode 01 exactly, no new data
+    //   To get proprietary data, use ATSH to target other ECUs (transmission=0x7E1, body=0x7E5)
     private val scanRanges = listOf(
-        0x0001..0x00FF,   // Low range — common OEM basics (engine, body)
         0xF400..0xF4FF,   // SAE J2190 extended standard range
     )
 
