@@ -94,3 +94,86 @@ class HARESTClient:
         print(f"  [created/updated] automation.{automation_id}")
         # Reload automations so the new one is active
         self.post("/api/services/automation/reload", {})
+
+
+class HAWebSocketClient:
+    """Async HA WebSocket client for Lovelace API."""
+
+    def __init__(self, host: str, token: str) -> None:
+        self.host = host
+        self.token = token
+        self._ws = None
+        self._msg_id = 0
+
+    async def connect(self) -> None:
+        ssl_ctx = ssl.create_default_context()
+        self._ws = await websockets.connect(
+            f"wss://{self.host}/api/websocket",
+            ssl=ssl_ctx,
+            ping_interval=20,
+        )
+        msg = json.loads(await self._ws.recv())
+        assert msg["type"] == "auth_required", f"Unexpected: {msg}"
+
+        await self._ws.send(
+            json.dumps({"type": "auth", "access_token": self.token})
+        )
+        msg = json.loads(await self._ws.recv())
+        if msg["type"] != "auth_ok":
+            raise Exception(f"HA auth failed: {msg}")
+        print(f"  [ws] Authenticated to {self.host}")
+
+    async def command(self, payload: dict) -> dict:
+        self._msg_id += 1
+        payload["id"] = self._msg_id
+        await self._ws.send(json.dumps(payload))
+        while True:
+            msg = json.loads(await self._ws.recv())
+            if msg.get("id") == self._msg_id:
+                if not msg.get("success", True):
+                    raise Exception(f"WS command failed: {msg}")
+                return msg.get("result", {})
+
+    async def close(self) -> None:
+        if self._ws:
+            await self._ws.close()
+
+    # ── Lovelace ─────────────────────────────────────────────────────────────
+
+    async def list_dashboards(self) -> list:
+        result = await self.command({"type": "lovelace/dashboards/list"})
+        return result if isinstance(result, list) else []
+
+    async def create_dashboard(
+        self, url_path: str, title: str, icon: str = "mdi:car"
+    ) -> dict:
+        dashboards = await self.list_dashboards()
+        existing = [d for d in dashboards if d.get("url_path") == url_path]
+        if existing:
+            print(f"  [skip] Dashboard '{url_path}' already exists")
+            return existing[0]
+
+        result = await self.command(
+            {
+                "type": "lovelace/dashboards/create",
+                "url_path": url_path,
+                "title": title,
+                "icon": icon,
+                "show_in_sidebar": True,
+                "require_admin": False,
+                "mode": "storage",
+            }
+        )
+        print(f"  [created] Dashboard '{title}' at /{url_path}")
+        return result
+
+    async def save_dashboard_config(self, url_path: str, config: dict) -> None:
+        await self.command(
+            {
+                "type": "lovelace/config/save",
+                "url_path": url_path,
+                "config": config,
+                "force": True,
+            }
+        )
+        print(f"  [saved] Dashboard config for '{url_path}'")
