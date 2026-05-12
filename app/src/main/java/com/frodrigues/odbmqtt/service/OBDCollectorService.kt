@@ -24,6 +24,7 @@ import com.frodrigues.odbmqtt.settings.AppSettings
 import com.frodrigues.odbmqtt.settings.dataStore
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
 
 enum class ServiceStatus { IDLE, CONNECTING, CONNECTED, RECONNECTING }
 enum class ConnectionStatus { DISCONNECTED, CONNECTING, CONNECTED }
@@ -179,8 +180,11 @@ class OBDCollectorService : LifecycleService() {
         status.value = ServiceStatus.CONNECTED
         updateNotification("Connected — ${supportedPids.size} M01 + ${mode22Pids.size} M22 PIDs")
 
-        val fastPids = supportedPids.intersect(PidPoller.FAST_PIDS)
-        val slowPids = supportedPids - fastPids
+        val userSelected: Set<Int>? = settings.selectedPids.first()
+        val activePids: Set<Int> = if (userSelected == null) supportedPids else supportedPids.intersect(userSelected)
+
+        val fastPids = activePids.intersect(PidPoller.FAST_PIDS)
+        val slowPids = activePids - fastPids
         status.value = ServiceStatus.CONNECTED
         updateNotification("Connected — ${fastPids.size} fast + ${slowPids.size} slow PIDs")
 

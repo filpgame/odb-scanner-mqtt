@@ -38,6 +38,8 @@ class AppSettings(private val dataStore: DataStore<Preferences>) {
         val DEVICE_MANUFACTURER = stringPreferencesKey("deviceManufacturer")
         // Mode 01 PID discovery cache
         val CACHED_PIDS = stringPreferencesKey("cachedPids")
+        // User-selected PIDs for MQTT publishing — null/absent = all discovered PIDs
+        val SELECTED_PIDS = stringPreferencesKey("selectedPids")
         // Mode 22 PID discovery cache — key:hex PID (4 chars), value:hex bytes
         val CACHED_MODE22_PIDS = stringPreferencesKey("cachedMode22Pids")
     }
@@ -76,6 +78,21 @@ class AppSettings(private val dataStore: DataStore<Preferences>) {
 
     suspend fun clearPidCache() {
         update { remove(CACHED_PIDS) }
+    }
+
+    // ── Selected PIDs ─────────────────────────────────────────────────────────
+    // null = all discovered PIDs are active (default)
+    val selectedPids: kotlinx.coroutines.flow.Flow<Set<Int>?> = dataStore.data.map { prefs ->
+        val raw = prefs[SELECTED_PIDS] ?: return@map null
+        if (raw.isBlank()) null
+        else raw.split(",").mapNotNull { it.trim().toIntOrNull(16) }.toSet()
+    }
+
+    suspend fun setSelectedPids(pids: Set<Int>?) {
+        update {
+            if (pids == null) remove(SELECTED_PIDS)
+            else this[SELECTED_PIDS] = pids.joinToString(",") { it.toString(16).uppercase() }
+        }
     }
 
     // ── Mode 22 cache ────────────────────────────────────────────────────────

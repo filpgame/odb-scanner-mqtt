@@ -6,6 +6,7 @@ import android.content.Intent
 import android.provider.Settings as AndroidSettings
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.ui.draw.rotate
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
@@ -32,7 +33,8 @@ import kotlinx.coroutines.launch
 @Composable
 fun SettingsScreen(
     settings: AppSettings,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    onNavigateToPidSelection: () -> Unit = {}
 ) {
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
@@ -435,6 +437,50 @@ fun SettingsScreen(
                         modifier = Modifier.fillMaxWidth()
                     )
                 }
+            }
+
+            // ── PID Selection ─────────────────────────────────────────────────
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+            SectionLabel("PIDs")
+
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+                ),
+                elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+            ) {
+                val cachedPids by settings.cachedPids.collectAsState(initial = emptySet())
+                val selectedPids by settings.selectedPids.collectAsState(initial = null)
+                val activeCount = selectedPids?.size ?: cachedPids.size
+                val totalCount = cachedPids.size
+
+                ListItem(
+                    headlineContent = { Text("PID Selection") },
+                    supportingContent = {
+                        Text(
+                            text = if (totalCount == 0) "No PIDs discovered yet"
+                                   else "$activeCount of $totalCount PIDs active",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    },
+                    trailingContent = {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.rotate(180f)
+                        )
+                    },
+                    colors = ListItemDefaults.colors(
+                        containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+                    ),
+                    modifier = Modifier.clickable(
+                        enabled = totalCount > 0,
+                        onClick = onNavigateToPidSelection
+                    )
+                )
             }
 
             // ── PID Cache ─────────────────────────────────────────────────────

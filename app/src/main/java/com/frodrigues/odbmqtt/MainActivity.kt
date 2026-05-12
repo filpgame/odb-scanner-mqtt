@@ -13,6 +13,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.frodrigues.odbmqtt.ui.MainScreen
 import com.frodrigues.odbmqtt.ui.MainViewModel
+import com.frodrigues.odbmqtt.ui.PidSelectionScreen
 import com.frodrigues.odbmqtt.ui.SettingsScreen
 import com.frodrigues.odbmqtt.ui.theme.OdbMqttTheme
 
@@ -56,6 +57,13 @@ private fun AppNavigation() {
         }
         composable("settings") {
             SettingsScreen(
+                settings = viewModel.settings,
+                onBack = { navController.popBackStack() },
+                onNavigateToPidSelection = { navController.navigate("pid_selection") }
+            )
+        }
+        composable("pid_selection") {
+            PidSelectionScreen(
                 settings = viewModel.settings,
                 onBack = { navController.popBackStack() }
             )
