@@ -1,34 +1,57 @@
 package com.frodrigues.odbmqtt.obd
 
 import android.util.Log
+import com.frodrigues.odbmqtt.settings.AppSettings
+import kotlinx.coroutines.flow.first
 
-class PidScanner(private val executor: ObdCommandExecutor) {
+class PidScanner(
+    private val executor: ObdCommandExecutor,
+    private val settings: AppSettings,
+    private val onProgress: suspend (scanned: Int, total: Int) -> Unit = { _, _ -> }
+) {
+    // Support bitmask PIDs — not real data PIDs
+    private val supportPids = setOf(0x00, 0x20, 0x40, 0x60, 0x80, 0xA0, 0xC0)
+    private val scanRange = (0x01..0xFF).filter { it !in supportPids }
 
     /**
-     * Probes each PID in PidRegistry directly instead of relying on OBD2 support bitmasks.
-     *
-     * Bitmask scanning (0100, 0120, ...) is unreliable on many vehicles — they declare PIDs
-     * as supported in the bitmask but return NO DATA when polled. Direct probing ensures
-     * supportedPids only contains PIDs that actually respond with valid data.
+     * Returns cached PIDs if available, otherwise runs a full brute-force scan.
+     * Cache persists across app restarts. Clear via AppSettings.clearPidCache().
      */
     suspend fun scan(): Set<Int> {
-        val supported = mutableSetOf<Int>()
-        Log.d(TAG, "Probing ${PidRegistry.definitions.size} known PIDs...")
+        val cached = settings.cachedPids.first()
+        if (cached.isNotEmpty()) {
+            Log.d(TAG, "Cache hit: ${cached.size} PIDs (use 'Rescan PIDs' in Settings to refresh)")
+            return cached
+        }
+        return bruteForce()
+    }
 
-        for ((pid, def) in PidRegistry.definitions) {
+    private suspend fun bruteForce(): Set<Int> {
+        val supported = mutableSetOf<Int>()
+        val total = scanRange.size
+        Log.d(TAG, "Brute-force scan: probing $total PIDs (0x01–0xFF)...")
+
+        scanRange.forEachIndexed { index, pid ->
+            onProgress(index + 1, total)
+
             val pidHex = pid.toString(16).padStart(2, '0').uppercase()
             val response = executor.sendCommand("01$pidHex")
-            val value = PidParser.parse(pid, response)
+            val bytes = ObdResponseParser.extractDataBytes(response, pid)
 
-            if (value != null) {
+            if (bytes != null && bytes.isNotEmpty()) {
                 supported.add(pid)
-                Log.d(TAG, "✓ 0x$pidHex ${def.name}: $value ${def.unit}")
+                val name = PidRegistry.definitions[pid]?.name ?: "Unknown"
+                Log.d(TAG, "✓ 0x$pidHex $name  [${bytes.size}B raw=${bytes.take(4).joinToString(" ") { "%02X".format(it) }}]")
             } else {
-                Log.v(TAG, "✗ 0x$pidHex ${def.name}: no data (response: ${response.take(40)})")
+                Log.v(TAG, "✗ 0x$pidHex: ${response.trim().take(20)}")
             }
         }
 
-        Log.d(TAG, "Scan complete — ${supported.size}/${PidRegistry.definitions.size} PIDs responding")
+        Log.d(TAG, "Brute-force done: ${supported.size}/$total PIDs respond")
+        Log.d(TAG, "Known in registry: ${supported.count { PidRegistry.definitions.containsKey(it) }}")
+        Log.d(TAG, "Unknown (raw): ${supported.count { !PidRegistry.definitions.containsKey(it) }}")
+
+        settings.savePidCache(supported)
         return supported
     }
 

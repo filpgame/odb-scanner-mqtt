@@ -117,8 +117,14 @@ class OBDCollectorService : LifecycleService() {
             val executor = ObdCommandExecutor(transport)
             executor.initialize()
 
-            updateNotification("Scanning supported PIDs...")
-            val supportedPids = PidScanner(executor).scan()
+            updateNotification("Scanning PIDs...")
+            val supportedPids = PidScanner(
+                executor = executor,
+                settings = settings,
+                onProgress = { scanned, total ->
+                    updateNotification("Scanning PIDs ($scanned/$total)...")
+                }
+            ).scan()
             activePidCount.value = supportedPids.size
             btStatus.value = ConnectionStatus.CONNECTED
 

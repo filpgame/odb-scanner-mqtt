@@ -36,6 +36,8 @@ class AppSettings(private val dataStore: DataStore<Preferences>) {
         val DEVICE_NAME = stringPreferencesKey("deviceName")
         val DEVICE_MODEL = stringPreferencesKey("deviceModel")
         val DEVICE_MANUFACTURER = stringPreferencesKey("deviceManufacturer")
+        // PID discovery cache
+        val CACHED_PIDS = stringPreferencesKey("cachedPids")
     }
 
     val btDeviceMac: Flow<String> = dataStore.data.map { it[BT_DEVICE_MAC] ?: "" }
@@ -59,6 +61,20 @@ class AppSettings(private val dataStore: DataStore<Preferences>) {
         deviceModel = deviceModel.first(),
         deviceManufacturer = deviceManufacturer.first()
     )
+
+    val cachedPids: Flow<Set<Int>> = dataStore.data.map { prefs ->
+        val raw = prefs[CACHED_PIDS] ?: ""
+        if (raw.isBlank()) emptySet()
+        else raw.split(",").mapNotNull { it.trim().toIntOrNull(16) }.toSet()
+    }
+
+    suspend fun savePidCache(pids: Set<Int>) {
+        update { this[CACHED_PIDS] = pids.joinToString(",") { it.toString(16).uppercase() } }
+    }
+
+    suspend fun clearPidCache() {
+        update { remove(CACHED_PIDS) }
+    }
 
     suspend fun update(block: MutablePreferences.() -> Unit) {
         dataStore.edit { block(it) }

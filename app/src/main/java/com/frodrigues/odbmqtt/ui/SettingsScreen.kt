@@ -437,6 +437,36 @@ fun SettingsScreen(
                 }
             }
 
+            // ── PID Cache ─────────────────────────────────────────────────────
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+            SectionLabel("OBD2 Scanner")
+
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+                ),
+                elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+            ) {
+                Column(
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(
+                        text = "Discovered PIDs are cached to avoid rescanning on every start. " +
+                               "Clear cache and restart the service to probe all PIDs again.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    OutlinedButton(
+                        onClick = { scope.launch { settings.clearPidCache() } },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Clear PID Cache (Rescan on next start)")
+                    }
+                }
+            }
+
             Spacer(Modifier.height(24.dp))
         }
     }

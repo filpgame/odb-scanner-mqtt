@@ -11,7 +11,7 @@ class HaDiscoveryPublisher(
 
     suspend fun publishDiscovery(supportedPids: Set<Int>, mac: String) {
         supportedPids.forEach { pid ->
-            val def = PidRegistry.definitions[pid] ?: return@forEach
+            val def = PidRegistry.getOrUnknown(pid)
             val pidHex = pid.toString(16).padStart(2, '0').uppercase()
             val topic = "homeassistant/sensor/obd2_$mac/$pidHex/config"
             val payload = buildPayload(def, mac, pidHex)
