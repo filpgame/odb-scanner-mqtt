@@ -191,6 +191,31 @@ object PidRegistry {
             (b.u(0) * 256 + b.u(1)).toDouble()
         },
 
+        // ── O2 Lambda / AFR ──────────────────────────────────────────────────
+        // 0x34: 4 bytes — bytes A/B = lambda ratio, C/D = sensor current
+        0x34 to PidDefinition(0x34, "O2 Lambda Ratio (AFR)", "ratio", null) { b ->
+            2.0 * (b.u(0) * 256 + b.u(1)) / 65536.0
+        },
+
+        // ── Catalyst Temperature ──────────────────────────────────────────────
+        // 0x3C: Bank 1 Sensor 1 — (256A+B)/10 - 40
+        0x3C to PidDefinition(0x3C, "Catalyst Temp B1 S1", "°C", "temperature") { b ->
+            (b.u(0) * 256 + b.u(1)) / 10.0 - 40.0
+        },
+        0x3D to PidDefinition(0x3D, "Catalyst Temp B2 S1", "°C", "temperature") { b ->
+            (b.u(0) * 256 + b.u(1)) / 10.0 - 40.0
+        },
+
+        // ── Secondary O2 Trim ────────────────────────────────────────────────
+        0x56 to PidDefinition(0x56, "LT O2 Trim B1", "%", null) { b ->
+            (100.0 * b.u(0) / 128.0) - 100.0
+        },
+
+        // ── Dual Coolant Temp (0x67 byte A = sensor count, B = sensor1, C = sensor2)
+        0x67 to PidDefinition(0x67, "Coolant Temp Sensor 1", "°C", "temperature") { b ->
+            b.u(1) - 40.0
+        },
+
         // ── Hybrid / Battery ──────────────────────────────────────────────────
         0x5B to PidDefinition(0x5B, "Hybrid Battery", "%", "battery") { b ->
             100.0 * b.u(0) / 255.0
