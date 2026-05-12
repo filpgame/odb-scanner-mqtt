@@ -90,18 +90,7 @@ class HARESTClient:
 
     def create_automation(self, automation_id: str, config: dict) -> None:
         """Upsert an automation via the HA config REST endpoint."""
-        resp = requests.post(
-            f"{self.base_url}/api/config/automation/config/{automation_id}",
-            headers=self.headers,
-            json=config,
-            timeout=15,
-        )
-        if resp.status_code == 200:
-            print(f"  [created/updated] automation.{automation_id}")
-        else:
-            raise Exception(
-                f"Failed to create automation {automation_id}: "
-                f"{resp.status_code} {resp.text}"
-            )
+        self.post(f"/api/config/automation/config/{automation_id}", config)
+        print(f"  [created/updated] automation.{automation_id}")
         # Reload automations so the new one is active
         self.post("/api/services/automation/reload", {})
