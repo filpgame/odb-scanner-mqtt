@@ -15,3 +15,6 @@
 local.properties
 .superpowers/
 .worktrees/
+*.pyc
+__pycache__/
+ha-dashboard/non_ascii.txt
