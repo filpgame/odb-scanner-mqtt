@@ -40,7 +40,10 @@ class AppSettings(private val dataStore: DataStore<Preferences>) {
         val SELECTED_PIDS = stringPreferencesKey("selectedPids")
         // Mode 22 PID discovery cache — key:hex PID (4 chars), value:hex bytes
         val CACHED_MODE22_PIDS = stringPreferencesKey("cachedMode22Pids")
+        val AUTO_START = booleanPreferencesKey("autoStart")
     }
+
+    val autoStart: Flow<Boolean> = dataStore.data.map { it[AUTO_START] ?: false }
 
     val btDeviceMac: Flow<String> = dataStore.data.map { it[BT_DEVICE_MAC] ?: "" }
     val mqttHost: Flow<String> = dataStore.data.map { it[MQTT_HOST] ?: "" }

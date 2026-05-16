@@ -41,6 +41,7 @@ fun SettingsScreen(
     val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
 
     val btMac by settings.btDeviceMac.collectAsState(initial = "")
+    val autoStart by settings.autoStart.collectAsState(initial = false)
 
     // Local text field state — avoids cursor-jump bug from DataStore re-emission
     var localHost by rememberSaveable { mutableStateOf("") }
@@ -399,6 +400,50 @@ fun SettingsScreen(
                         modifier = Modifier.fillMaxWidth()
                     )
                 }
+            }
+
+            // ── Comportamento ─────────────────────────────────────────────────
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+            SectionLabel("Comportamento")
+
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+                ),
+                elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+            ) {
+                ListItem(
+                    headlineContent = { Text("Iniciar automaticamente") },
+                    supportingContent = {
+                        Text(
+                            text = "Inicia o serviço ao ligar o dispositivo e mantém ativo em segundo plano.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    },
+                    trailingContent = {
+                        Switch(
+                            checked = autoStart,
+                            onCheckedChange = { enabled ->
+                                scope.launch {
+                                    settings.update { this[AppSettings.AUTO_START] = enabled }
+                                }
+                            }
+                        )
+                    },
+                    colors = ListItemDefaults.colors(
+                        containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+                    ),
+                    modifier = Modifier.clickable(
+                        role = Role.Switch,
+                        onClickLabel = "Iniciar automaticamente"
+                    ) {
+                        scope.launch {
+                            settings.update { this[AppSettings.AUTO_START] = !autoStart }
+                        }
+                    }
+                )
             }
 
             // ── PID Selection ─────────────────────────────────────────────────

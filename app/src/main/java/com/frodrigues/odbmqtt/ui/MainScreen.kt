@@ -35,83 +35,18 @@ fun MainScreen(
                     serviceStatus == ServiceStatus.CONNECTING ||
                     serviceStatus == ServiceStatus.RECONNECTING
 
-    var showPidDialog by remember { mutableStateOf(false) }
+    val autoStart by viewModel.settings.autoStart.collectAsState(initial = false)
 
-    // PID list dialog
-    if (showPidDialog) {
-        AlertDialog(
-            onDismissRequest = { showPidDialog = false },
-            title = {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text("Active PIDs")
-                    Text(
-                        text = "${pidReadings.size}",
-                        style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            },
-            text = {
-                if (pidReadings.isEmpty()) {
-                    Text(
-                        text = "No PID data yet. Start the service and wait for the first poll cycle.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                } else {
-                    val currentReadings by viewModel.pidReadings.collectAsState()
-                    val sortedEntries = currentReadings.entries
-                        .sortedWith(compareBy {
-                            PidRegistry.definitions[it.key]?.name ?: "zz_${it.key}"
-                        })
+    LaunchedEffect(autoStart, serviceStatus) {
+        if (autoStart && serviceStatus == ServiceStatus.IDLE) {
+            viewModel.startService()
+        }
+    }
 
-                    Column(
-                        modifier = Modifier
-                            .heightIn(max = 480.dp)
-                            .verticalScroll(rememberScrollState()),
-                        verticalArrangement = Arrangement.spacedBy(0.dp)
-                    ) {
-                        sortedEntries.forEachIndexed { index, (pid, value) ->
-                            val def = PidRegistry.definitions[pid]
-                            val name = def?.name ?: "PID 0x${pid.toString(16).uppercase()}"
-                            val unit = def?.unit ?: ""
-                            val formatted = formatValue(value, unit)
-
-                            if (index > 0) HorizontalDivider(
-                                color = MaterialTheme.colorScheme.outlineVariant
-                            )
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(vertical = 10.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(
-                                    text = name,
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurface,
-                                    modifier = Modifier.weight(1f)
-                                )
-                                Text(
-                                    text = formatted,
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    fontWeight = FontWeight.Medium,
-                                    color = MaterialTheme.colorScheme.primary
-                                )
-                            }
-                        }
-                    }
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = { showPidDialog = false }) { Text("Close") }
-            }
-        )
+    val sortedPidEntries = remember(pidReadings) {
+        pidReadings.entries.sortedWith(compareBy {
+            PidRegistry.definitions[it.key]?.name ?: "zz_${it.key}"
+        })
     }
 
     Scaffold(
@@ -140,50 +75,58 @@ fun MainScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .padding(horizontal = 16.dp, vertical = 24.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            // ── Connection status cards ───────────────────────────────────────
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            // ── Scrollable content ────────────────────────────────────────────
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 16.dp)
+                    .padding(top = 24.dp, bottom = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                ConnectionCard(
-                    label = "OBD2",
-                    status = btStatus,
-                    modifier = Modifier.weight(1f)
-                )
-                ConnectionCard(
-                    label = "MQTT Broker",
-                    status = mqttStatus,
-                    modifier = Modifier.weight(1f)
-                )
-            }
-
-            // ── Active PIDs card ──────────────────────────────────────────────
-            ElevatedCard(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.elevatedCardColors()
-            ) {
+                // ── Connection status cards ───────────────────────────────────
                 Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 20.dp, vertical = 16.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                        Text(
-                            text = "Active PIDs",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Text(
-                            text = "$pidCount",
-                            style = MaterialTheme.typography.headlineSmall,
-                            fontWeight = FontWeight.SemiBold,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
+                    ConnectionCard(
+                        label = "OBD2",
+                        status = btStatus,
+                        modifier = Modifier.weight(1f)
+                    )
+                    ConnectionCard(
+                        label = "MQTT Broker",
+                        status = mqttStatus,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+
+                // ── Active PIDs summary card ──────────────────────────────────
+                ElevatedCard(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.elevatedCardColors()
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 20.dp, vertical = 16.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                            Text(
+                                text = "Active PIDs",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Text(
+                                text = "$pidCount",
+                                style = MaterialTheme.typography.headlineSmall,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                        }
                         if (lastUpdate > 0L) {
                             Text(
                                 text = "Updated ${SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date(lastUpdate))}",
@@ -192,34 +135,80 @@ fun MainScreen(
                             )
                         }
                     }
-                    if (pidCount > 0) {
-                        FilledTonalButton(onClick = { showPidDialog = true }) {
-                            Text("View PIDs")
+                }
+
+                // ── PID readings list ─────────────────────────────────────────
+                if (sortedPidEntries.isNotEmpty()) {
+                    Text(
+                        text = "Readings",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.padding(horizontal = 4.dp)
+                    )
+
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+                        ),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+                    ) {
+                        Column(modifier = Modifier.padding(horizontal = 16.dp)) {
+                            sortedPidEntries.forEachIndexed { index, (pid, value) ->
+                                val def = PidRegistry.definitions[pid]
+                                val name = def?.name ?: "PID 0x${pid.toString(16).uppercase()}"
+                                val unit = def?.unit ?: ""
+                                val formatted = formatValue(value, unit)
+
+                                if (index > 0) HorizontalDivider(
+                                    color = MaterialTheme.colorScheme.outlineVariant
+                                )
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 12.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = name,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                    Text(
+                                        text = formatted,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        fontWeight = FontWeight.Medium,
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                }
+                            }
                         }
                     }
                 }
             }
 
-            Spacer(modifier = Modifier.weight(1f))
-
-            // ── Start / Stop ──────────────────────────────────────────────────
-            Button(
-                onClick = { if (isRunning) viewModel.stopService() else viewModel.startService() },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(56.dp),
-                colors = if (isRunning)
-                    ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.error,
-                        contentColor = MaterialTheme.colorScheme.onError
+            // ── Start / Stop (fixo no rodapé) ─────────────────────────────────
+            Box(modifier = Modifier.padding(horizontal = 16.dp, vertical = 16.dp)) {
+                Button(
+                    onClick = { if (isRunning) viewModel.stopService() else viewModel.startService() },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(56.dp),
+                    colors = if (isRunning)
+                        ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.error,
+                            contentColor = MaterialTheme.colorScheme.onError
+                        )
+                    else
+                        ButtonDefaults.buttonColors()
+                ) {
+                    Text(
+                        text = if (isRunning) "Stop" else "Start",
+                        style = MaterialTheme.typography.labelLarge
                     )
-                else
-                    ButtonDefaults.buttonColors()
-            ) {
-                Text(
-                    text = if (isRunning) "Stop" else "Start",
-                    style = MaterialTheme.typography.labelLarge
-                )
+                }
             }
         }
     }
