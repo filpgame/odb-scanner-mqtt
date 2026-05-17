@@ -40,6 +40,13 @@ jobs:
           SIGNING_KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD }}
           SIGNING_STORE_PASSWORD: ${{ secrets.SIGNING_STORE_PASSWORD }}
 
+      - name: Rename APKs
+        run: |
+          APP_ID="com.frodrigues.odbmqtt"
+          VERSION="${GITHUB_REF_NAME#v}"
+          mv app/build/outputs/apk/debug/*.apk   "app/build/outputs/apk/debug/${APP_ID}-${VERSION}-debug.apk"
+          mv app/build/outputs/apk/release/*.apk "app/build/outputs/apk/release/${APP_ID}-${VERSION}-release.apk"
+
       - name: Generate release notes from commits
         id: release_notes
         run: |
