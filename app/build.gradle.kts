@@ -47,18 +47,18 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
-    val keystorePath  = System.getenv("SIGNING_KEYSTORE_PATH")
-    val keyAlias      = System.getenv("SIGNING_KEY_ALIAS")
-    val keyPassword   = System.getenv("SIGNING_KEY_PASSWORD")
-    val storePassword = System.getenv("SIGNING_STORE_PASSWORD")
+    val envKeystorePath  = System.getenv("SIGNING_KEYSTORE_PATH")
+    val envKeyAlias      = System.getenv("SIGNING_KEY_ALIAS")
+    val envKeyPassword   = System.getenv("SIGNING_KEY_PASSWORD")
+    val envStorePassword = System.getenv("SIGNING_STORE_PASSWORD")
 
     signingConfigs {
-        if (keystorePath != null) {
+        if (envKeystorePath != null) {
             create("release") {
-                storeFile     = file(keystorePath)
-                storePassword = storePassword
-                keyAlias      = keyAlias
-                keyPassword   = keyPassword
+                storeFile     = file(envKeystorePath)
+                storePassword = envStorePassword
+                keyAlias      = envKeyAlias
+                keyPassword   = envKeyPassword
             }
         }
     }
@@ -70,7 +70,7 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            if (keystorePath != null) {
+            if (envKeystorePath != null) {
                 signingConfig = signingConfigs.getByName("release")
             }
         }
@@ -90,12 +90,14 @@ android {
             )
         }
     }
-    applicationVariants.all {
-        val variant = this
-        variant.outputs.all {
-            val output = this as com.android.build.gradle.internal.api.BaseVariantOutputImpl
-            output.outputFileName =
-                "${variant.applicationId}-${variant.versionName}-${variant.buildType.name}.apk"
+}
+
+androidComponents {
+    onVariants { variant ->
+        variant.outputs.forEach { output ->
+            output.outputFileName.set(
+                "${variant.applicationId.get()}-$appVersionName-${variant.buildType}.apk"
+            )
         }
     }
 }
