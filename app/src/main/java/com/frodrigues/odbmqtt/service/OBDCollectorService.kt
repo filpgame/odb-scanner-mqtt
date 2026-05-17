@@ -8,6 +8,7 @@ import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Binder
 import android.os.IBinder
+import android.os.PowerManager
 import androidx.core.app.NotificationCompat
 import androidx.lifecycle.LifecycleService
 import androidx.lifecycle.lifecycleScope
@@ -39,6 +40,7 @@ class OBDCollectorService : LifecycleService() {
     private val binder = LocalBinder()
 
     private lateinit var settings: AppSettings
+    private var wakeLock: PowerManager.WakeLock? = null
     private var collectorJob: Job? = null
     private var currentStateTopics: List<String> = emptyList()
     @Volatile private var mqttPublisherRef: MqttPublisher? = null
@@ -75,8 +77,11 @@ class OBDCollectorService : LifecycleService() {
             buildNotification("Starting..."),
             ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE
         )
+        wakeLock = (getSystemService(POWER_SERVICE) as PowerManager)
+            .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "OBDCollector::polling")
+            .also { it.acquire() }
         collectorJob?.cancel()
-        collectorJob = lifecycleScope.launch { collectWithRetry() }
+        collectorJob = lifecycleScope.launch(Dispatchers.Default) { collectWithRetry() }
     }
 
     private suspend fun collectWithRetry() {
@@ -87,7 +92,18 @@ class OBDCollectorService : LifecycleService() {
                 collect()
                 attempt = 0
             } catch (e: CancellationException) {
-                throw e
+                if (e is TimeoutCancellationException) {
+                    // sendCommand socket stalled — recoverable, reconnect with backoff
+                    status.value = ServiceStatus.RECONNECTING
+                    btStatus.value = ConnectionStatus.DISCONNECTED
+                    mqttStatus.value = ConnectionStatus.DISCONNECTED
+                    val delay = backoffMs.getOrElse(attempt) { 60_000L }
+                    attempt = minOf(attempt + 1, backoffMs.lastIndex)
+                    updateNotification("Reconnecting in ${delay / 1000}s...")
+                    delay(delay)
+                } else {
+                    throw e  // actual job cancellation — stop the loop
+                }
             } catch (e: Exception) {
                 status.value = ServiceStatus.RECONNECTING
                 btStatus.value = ConnectionStatus.DISCONNECTED
@@ -220,8 +236,19 @@ class OBDCollectorService : LifecycleService() {
             pidReadings.value = emptyMap()
         }
         job.cancel()
+        releaseWakeLock()
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()
+    }
+
+    private fun releaseWakeLock() {
+        wakeLock?.let { if (it.isHeld) it.release() }
+        wakeLock = null
+    }
+
+    override fun onDestroy() {
+        releaseWakeLock()
+        super.onDestroy()
     }
 
     private suspend fun publishUnavailable() {

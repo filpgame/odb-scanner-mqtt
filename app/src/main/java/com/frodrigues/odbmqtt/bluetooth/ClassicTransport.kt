@@ -6,6 +6,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.runInterruptible
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import java.io.IOException
@@ -49,7 +50,7 @@ class ClassicTransport(private val device: BluetoothDevice) : BluetoothTransport
         }
     }
 
-    private fun readUntilPrompt(inp: InputStream): String {
+    private suspend fun readUntilPrompt(inp: InputStream): String = runInterruptible {
         val buffer = StringBuilder()
         val b = ByteArray(1)
         while (true) {
@@ -59,7 +60,7 @@ class ClassicTransport(private val device: BluetoothDevice) : BluetoothTransport
             if (ch == '>') break
             buffer.append(ch)
         }
-        return buffer.toString().trim()
+        buffer.toString().trim()
     }
 
     companion object {
