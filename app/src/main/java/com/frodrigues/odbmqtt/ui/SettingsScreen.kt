@@ -462,8 +462,8 @@ fun SettingsScreen(
                 elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
             ) {
                 val cachedPids by settings.cachedPids.collectAsState(initial = emptySet())
-                val selectedPids by settings.selectedPids.collectAsState(initial = null)
-                val activeCount = selectedPids?.size ?: cachedPids.size
+                val fastPids by settings.fastPids.collectAsState(initial = emptySet())
+                val slowPids by settings.slowPids.collectAsState(initial = emptySet())
                 val totalCount = cachedPids.size
 
                 ListItem(
@@ -471,7 +471,7 @@ fun SettingsScreen(
                     supportingContent = {
                         Text(
                             text = if (totalCount == 0) "No PIDs discovered yet"
-                                   else "$activeCount of $totalCount PIDs active",
+                                   else "${fastPids.size} rápidos · ${slowPids.size} lentos · $totalCount descobertos",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )

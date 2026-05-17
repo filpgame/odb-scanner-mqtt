@@ -12,11 +12,10 @@ data class PidReading(
 
 class PidPoller(
     private val executor: ObdCommandExecutor,
-    private val pids: Set<Int>
+    private val fastPids: Set<Int>,
+    private val slowPids: Set<Int>
 ) {
-    private val fastPids = pids.filter { PidRegistry.getOrUnknown(it).isFast }.toSet()
-    private val slowPids = pids - fastPids
-    private val slowEvery = SLOW_INTERVAL_SECONDS / FAST_INTERVAL_SECONDS  // 30
+    private val slowEvery = SLOW_INTERVAL_SECONDS / FAST_INTERVAL_SECONDS
 
     fun readings(): Flow<PidReading> = flow {
         var cycle = 0

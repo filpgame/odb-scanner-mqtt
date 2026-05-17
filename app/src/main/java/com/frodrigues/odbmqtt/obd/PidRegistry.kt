@@ -4,7 +4,7 @@ object PidRegistry {
 
     val definitions: Map<Int, PidDefinition> = mapOf(
         // ── Engine / Load ─────────────────────────────────────────────────────
-        0x04 to PidDefinition(0x04, "Engine Load", "%", null, true) { b ->
+        0x04 to PidDefinition(0x04, "Engine Load", "%", null) { b ->
             b.u(0) / 2.55
         },
         0x43 to PidDefinition(0x43, "Absolute Load", "%", null) { b ->
@@ -12,7 +12,7 @@ object PidRegistry {
         },
 
         // ── Temperatures ──────────────────────────────────────────────────────
-        0x05 to PidDefinition(0x05, "Coolant Temp", "°C", "temperature", true) { b ->
+        0x05 to PidDefinition(0x05, "Coolant Temp", "°C", "temperature") { b ->
             b.u(0) - 40.0
         },
         0x0F to PidDefinition(0x0F, "Intake Air Temp", "°C", "temperature") { b ->
@@ -43,7 +43,7 @@ object PidRegistry {
         0x0A to PidDefinition(0x0A, "Fuel Pressure", "kPa", "pressure") { b ->
             3.0 * b.u(0)
         },
-        0x0B to PidDefinition(0x0B, "Intake MAP", "kPa", "pressure", true) { b ->
+        0x0B to PidDefinition(0x0B, "Intake MAP", "kPa", "pressure") { b ->
             b.u(0).toDouble()
         },
         0x22 to PidDefinition(0x22, "Fuel Rail Pressure (rel)", "kPa", "pressure") { b ->
@@ -60,15 +60,15 @@ object PidRegistry {
         },
 
         // ── Speed / RPM ───────────────────────────────────────────────────────
-        0x0C to PidDefinition(0x0C, "RPM", "rpm", null, true) { b ->
+        0x0C to PidDefinition(0x0C, "RPM", "rpm", null) { b ->
             (b.u(0) * 256 + b.u(1)) / 4.0
         },
-        0x0D to PidDefinition(0x0D, "Speed", "km/h", "speed", true) { b ->
+        0x0D to PidDefinition(0x0D, "Speed", "km/h", "speed") { b ->
             b.u(0).toDouble()
         },
 
         // ── Timing / Ignition ─────────────────────────────────────────────────
-        0x0E to PidDefinition(0x0E, "Timing Advance", "°", null, true) { b ->
+        0x0E to PidDefinition(0x0E, "Timing Advance", "°", null) { b ->
             b.u(0) / 2.0 - 64.0
         },
         0x5D to PidDefinition(0x5D, "Injection Timing", "°", null) { b ->
@@ -84,24 +84,24 @@ object PidRegistry {
         },
 
         // ── Throttle ──────────────────────────────────────────────────────────
-        0x11 to PidDefinition(0x11, "Throttle Position", "%", null, true) { b ->
+        0x11 to PidDefinition(0x11, "Throttle Position", "%", null) { b ->
             100.0 * b.u(0) / 255.0
         },
-        0x45 to PidDefinition(0x45, "Relative Throttle", "%", null, true) { b ->
+        0x45 to PidDefinition(0x45, "Relative Throttle", "%", null) { b ->
             100.0 * b.u(0) / 255.0
         },
-        0x47 to PidDefinition(0x47, "Absolute Throttle B", "%", null, true) { b ->
+        0x47 to PidDefinition(0x47, "Absolute Throttle B", "%", null) { b ->
             100.0 * b.u(0) / 255.0
         },
         0x48 to PidDefinition(0x48, "Absolute Throttle C", "%", null) { b ->
             100.0 * b.u(0) / 255.0
         },
-        0x4C to PidDefinition(0x4C, "Commanded Throttle", "%", null, true) { b ->
+        0x4C to PidDefinition(0x4C, "Commanded Throttle", "%", null) { b ->
             100.0 * b.u(0) / 255.0
         },
 
         // ── Accelerator Pedal ─────────────────────────────────────────────────
-        0x49 to PidDefinition(0x49, "Accel Pedal D", "%", null, true) { b ->
+        0x49 to PidDefinition(0x49, "Accel Pedal D", "%", null) { b ->
             100.0 * b.u(0) / 255.0
         },
         0x4A to PidDefinition(0x4A, "Accel Pedal E", "%", null) { b ->
@@ -132,12 +132,12 @@ object PidRegistry {
         0x14 to PidDefinition(0x14, "O2 Sensor 1 Voltage", "V", "voltage") { b ->
             b.u(0) / 200.0
         },
-        0x15 to PidDefinition(0x15, "O2 Sensor 2 Voltage", "V", "voltage", true) { b ->
+        0x15 to PidDefinition(0x15, "O2 Sensor 2 Voltage", "V", "voltage") { b ->
             b.u(0) / 200.0
         },
 
         // ── Air-Fuel Ratio ────────────────────────────────────────────────────
-        0x44 to PidDefinition(0x44, "Commanded AFR", "ratio", null, true) { b ->
+        0x44 to PidDefinition(0x44, "Commanded AFR", "ratio", null) { b ->
             2.0 * (b.u(0) * 256 + b.u(1)) / 65536.0
         },
 
@@ -145,7 +145,7 @@ object PidRegistry {
         0x2C to PidDefinition(0x2C, "Commanded EGR", "%", null) { b ->
             100.0 * b.u(0) / 255.0
         },
-        0x2D to PidDefinition(0x2D, "EGR Error", "%", null, true) { b ->
+        0x2D to PidDefinition(0x2D, "EGR Error", "%", null) { b ->
             (100.0 * b.u(0) / 128.0) - 100.0
         },
         0x2E to PidDefinition(0x2E, "Commanded Evap Purge", "%", null) { b ->
@@ -153,7 +153,7 @@ object PidRegistry {
         },
 
         // ── Voltage ───────────────────────────────────────────────────────────
-        0x42 to PidDefinition(0x42, "Control Module Voltage", "V", "voltage", true) { b ->
+        0x42 to PidDefinition(0x42, "Control Module Voltage", "V", "voltage") { b ->
             (b.u(0) * 256 + b.u(1)) / 1000.0
         },
 
@@ -193,7 +193,7 @@ object PidRegistry {
 
         // ── O2 Lambda / AFR ──────────────────────────────────────────────────
         // 0x34: 4 bytes — bytes A/B = lambda ratio, C/D = sensor current
-        0x34 to PidDefinition(0x34, "O2 Lambda Ratio (AFR)", "ratio", null, true) { b ->
+        0x34 to PidDefinition(0x34, "O2 Lambda Ratio (AFR)", "ratio", null) { b ->
             2.0 * (b.u(0) * 256 + b.u(1)) / 65536.0
         },
 
@@ -227,10 +227,6 @@ object PidRegistry {
         }
     )
 
-    /**
-     * Returns a known definition or creates a generic one for unknown PIDs.
-     * Generic formula: first 2 bytes as unsigned integer, or first byte if only 1 byte.
-     */
     fun getOrUnknown(pid: Int): PidDefinition = definitions[pid] ?: PidDefinition(
         pid = pid,
         name = "PID 0x${pid.toString(16).padStart(2, '0').uppercase()}",

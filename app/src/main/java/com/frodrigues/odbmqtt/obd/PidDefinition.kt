@@ -7,7 +7,6 @@ data class PidDefinition(
     val name: String,
     val unit: String,
     val haDeviceClass: String?,
-    val isFast: Boolean = false,
     val formula: PidFormula
 )
 

@@ -47,14 +47,38 @@ class AppSettings(private val dataStore: DataStore<Preferences>) {
         val DEVICE_MANUFACTURER = stringPreferencesKey("deviceManufacturer")
         // Mode 01 PID discovery cache
         val CACHED_PIDS = stringPreferencesKey("cachedPids")
-        // User-selected PIDs for MQTT publishing — null/absent = all discovered PIDs
-        val SELECTED_PIDS = stringPreferencesKey("selectedPids")
+        // PID polling modes — absent = use defaults (auto-migration for old installs)
+        val FAST_PIDS = stringPreferencesKey("fastPids")
+        val SLOW_PIDS = stringPreferencesKey("slowPids")
         // Mode 22 PID discovery cache — key:hex PID (4 chars), value:hex bytes
         val CACHED_MODE22_PIDS = stringPreferencesKey("cachedMode22Pids")
         val AUTO_START = booleanPreferencesKey("autoStart")
+
+        // Default PID sets — applied on first launch and after update from old binary model
+        val DEFAULT_FAST_PIDS: Set<Int> = setOf(0x0C, 0x0D, 0x42, 0x5E) // RPM, Speed, Voltage, Fuel Rate
+        val DEFAULT_SLOW_PIDS: Set<Int> = setOf(0x2F, 0xA6)              // Fuel Level, Odometer
     }
 
     val autoStart: Flow<Boolean> = dataStore.data.map { it[AUTO_START] ?: false }
+
+    val fastPids: Flow<Set<Int>> = dataStore.data.map { prefs ->
+        val raw = prefs[FAST_PIDS] ?: return@map DEFAULT_FAST_PIDS
+        if (raw.isBlank()) emptySet()
+        else raw.split(",").mapNotNull { it.trim().toIntOrNull(16) }.toSet()
+    }
+
+    val slowPids: Flow<Set<Int>> = dataStore.data.map { prefs ->
+        val raw = prefs[SLOW_PIDS] ?: return@map DEFAULT_SLOW_PIDS
+        if (raw.isBlank()) emptySet()
+        else raw.split(",").mapNotNull { it.trim().toIntOrNull(16) }.toSet()
+    }
+
+    suspend fun savePidModes(fast: Set<Int>, slow: Set<Int>) {
+        update {
+            this[FAST_PIDS] = fast.joinToString(",") { it.toString(16).uppercase() }
+            this[SLOW_PIDS] = slow.joinToString(",") { it.toString(16).uppercase() }
+        }
+    }
 
     val btDeviceMac: Flow<String> = dataStore.data.map { it[BT_DEVICE_MAC] ?: "" }
     val mqttHost: Flow<String> = dataStore.data.map { it[MQTT_HOST] ?: "" }
@@ -88,21 +112,6 @@ class AppSettings(private val dataStore: DataStore<Preferences>) {
 
     suspend fun clearPidCache() {
         update { remove(CACHED_PIDS) }
-    }
-
-    // ── Selected PIDs ─────────────────────────────────────────────────────────
-    // null = all discovered PIDs are active (default)
-    val selectedPids: kotlinx.coroutines.flow.Flow<Set<Int>?> = dataStore.data.map { prefs ->
-        val raw = prefs[SELECTED_PIDS] ?: return@map null
-        if (raw.isBlank()) null
-        else raw.split(",").mapNotNull { it.trim().toIntOrNull(16) }.toSet()
-    }
-
-    suspend fun setSelectedPids(pids: Set<Int>?) {
-        update {
-            if (pids == null) remove(SELECTED_PIDS)
-            else this[SELECTED_PIDS] = pids.joinToString(",") { it.toString(16).uppercase() }
-        }
     }
 
     // ── Mode 22 cache ────────────────────────────────────────────────────────

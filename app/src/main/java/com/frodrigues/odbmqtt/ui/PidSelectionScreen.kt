@@ -1,23 +1,25 @@
 package com.frodrigues.odbmqtt.ui
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.frodrigues.odbmqtt.obd.PidPoller
 import com.frodrigues.odbmqtt.obd.PidRegistry
 import com.frodrigues.odbmqtt.settings.AppSettings
+import com.frodrigues.odbmqtt.settings.PidMode
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+
+private const val FAST_PID_LIMIT = 10
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -26,50 +28,82 @@ fun PidSelectionScreen(
     onBack: () -> Unit
 ) {
     val scope = rememberCoroutineScope()
-
     val cachedPids by settings.cachedPids.collectAsState(initial = emptySet())
-
-    var selected by remember { mutableStateOf<Set<Int>>(emptySet()) }
+    var modes by remember { mutableStateOf<Map<Int, PidMode>>(emptyMap()) }
     var initialized by remember { mutableStateOf(false) }
+    var showInfoDialog by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
-        val cachedSet = settings.cachedPids.first()
-        val userSet = settings.selectedPids.first()
-        selected = userSet ?: cachedSet
+        val fast = settings.fastPids.first()
+        val slow = settings.slowPids.first()
+        val allPids = settings.cachedPids.first()
+        modes = allPids.associateWith { pid ->
+            when (pid) {
+                in fast -> PidMode.FAST
+                in slow -> PidMode.SLOW
+                else -> PidMode.OFF
+            }
+        }
         initialized = true
     }
 
-    fun toggle(pid: Int) {
-        val next = if (pid in selected) selected - pid else selected + pid
-        selected = next
+    val fastCount = modes.values.count { it == PidMode.FAST }
+    val slowCount = modes.values.count { it == PidMode.SLOW }
+    val fastAtLimit = fastCount >= FAST_PID_LIMIT
+
+    fun setMode(pid: Int, newMode: PidMode) {
+        val currentMode = modes[pid] ?: PidMode.OFF
+        if (newMode == PidMode.FAST && currentMode != PidMode.FAST && fastAtLimit) return
+        modes = modes + (pid to newMode)
         scope.launch {
-            val allDiscovered = settings.cachedPids.first()
-            settings.setSelectedPids(if (next == allDiscovered) null else next)
+            settings.savePidModes(
+                fast = modes.filterValues { it == PidMode.FAST }.keys,
+                slow = modes.filterValues { it == PidMode.SLOW }.keys
+            )
         }
     }
 
-    fun selectAll() {
-        selected = cachedPids
-        scope.launch { settings.setSelectedPids(null) }
+    if (showInfoDialog) {
+        AlertDialog(
+            onDismissRequest = { showInfoDialog = false },
+            title = { Text("Frequência de coleta") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text(
+                        "Rápida (${PidPoller.FAST_INTERVAL_SECONDS}s) — Limite de $FAST_PID_LIMIT PIDs\n" +
+                        "Valor coletado a cada segundo. Use para dados em tempo real como RPM e velocidade.",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                    Text(
+                        "Lenta (${PidPoller.SLOW_INTERVAL_SECONDS}s) — Sem limite\n" +
+                        "Valor coletado a cada 30 segundos. Para dados que mudam devagar, como temperatura e nível de combustível.",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                    Text(
+                        "Off\n" +
+                        "PID não é coletado nem enviado ao MQTT.",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showInfoDialog = false }) { Text("OK") }
+            }
+        )
     }
-
-    fun deselectAll() {
-        selected = emptySet()
-        scope.launch { settings.setSelectedPids(emptySet()) }
-    }
-
-    val sortedPids = cachedPids.sortedWith(
-        compareByDescending<Int> { PidRegistry.getOrUnknown(it).isFast }
-            .thenBy { PidRegistry.getOrUnknown(it).name }
-    )
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("PID Selection") },
+                title = { Text("Seleção de PIDs") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Voltar")
+                    }
+                },
+                actions = {
+                    IconButton(onClick = { showInfoDialog = true }) {
+                        Icon(Icons.Outlined.Info, contentDescription = "Informações sobre frequências")
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors()
@@ -85,17 +119,30 @@ fun PidSelectionScreen(
 
         if (cachedPids.isEmpty()) {
             Box(
-                modifier = Modifier.fillMaxSize().padding(padding).padding(24.dp),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding)
+                    .padding(24.dp),
                 contentAlignment = Alignment.Center
             ) {
                 Text(
-                    "No PIDs discovered yet. Start the service with the car connected first.",
+                    "Nenhum PID descoberto. Inicie o serviço com o carro conectado primeiro.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
             return@Scaffold
         }
+
+        val sortedPids = cachedPids.sortedWith(
+            compareBy<Int> {
+                when (modes[it]) {
+                    PidMode.FAST -> 0
+                    PidMode.SLOW -> 1
+                    else -> 2
+                }
+            }.thenBy { PidRegistry.getOrUnknown(it).name }
+        )
 
         Column(
             modifier = Modifier
@@ -106,11 +153,8 @@ fun PidSelectionScreen(
         ) {
             Spacer(Modifier.height(4.dp))
 
-            // ── Summary + bulk actions ────────────────────────────────────────
             Card(
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceContainerLow
-                ),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
                 elevation = CardDefaults.cardElevation(0.dp),
                 modifier = Modifier.fillMaxWidth()
             ) {
@@ -122,38 +166,38 @@ fun PidSelectionScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Column {
-                        Text(
-                            text = "${selected.size} of ${cachedPids.size} PIDs selected",
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.Medium
-                        )
-                        Text(
-                            text = "Fast: ${PidPoller.FAST_INTERVAL_SECONDS}s · Slow: ${PidPoller.SLOW_INTERVAL_SECONDS}s",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(start = 8.dp, end = 8.dp, bottom = 8.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    TextButton(onClick = { selectAll() }, modifier = Modifier.weight(1f)) {
-                        Text("Select All")
-                    }
-                    TextButton(onClick = { deselectAll() }, modifier = Modifier.weight(1f)) {
-                        Text("Deselect All")
+                        Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                            Text(
+                                "Rápida: $fastCount/$FAST_PID_LIMIT",
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Medium,
+                                color = if (fastAtLimit) MaterialTheme.colorScheme.error
+                                        else MaterialTheme.colorScheme.onSurface
+                            )
+                            Text(
+                                "Lenta: $slowCount",
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Medium
+                            )
+                            Text(
+                                "Off: ${cachedPids.size - fastCount - slowCount}",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        if (fastAtLimit) {
+                            Text(
+                                "Limite de $FAST_PID_LIMIT PIDs rápidos atingido",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.error
+                            )
+                        }
                     }
                 }
             }
 
-            // ── PID list (sorted: fast first, then alphabetical) ──────────────
             Card(
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceContainerLow
-                ),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
                 elevation = CardDefaults.cardElevation(0.dp),
                 modifier = Modifier.fillMaxWidth()
             ) {
@@ -164,8 +208,9 @@ fun PidSelectionScreen(
                     )
                     PidRow(
                         pid = pid,
-                        checked = pid in selected,
-                        onToggle = { toggle(pid) }
+                        mode = modes[pid] ?: PidMode.OFF,
+                        fastAtLimit = fastAtLimit,
+                        onModeChange = { setMode(pid, it) }
                     )
                 }
             }
@@ -175,23 +220,48 @@ fun PidSelectionScreen(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun PidRow(pid: Int, checked: Boolean, onToggle: () -> Unit) {
+private fun PidRow(
+    pid: Int,
+    mode: PidMode,
+    fastAtLimit: Boolean,
+    onModeChange: (PidMode) -> Unit
+) {
     val def = PidRegistry.getOrUnknown(pid)
-    val speed = if (def.isFast) "${PidPoller.FAST_INTERVAL_SECONDS}s" else "${PidPoller.SLOW_INTERVAL_SECONDS}s"
-    ListItem(
-        headlineContent = { Text(def.name, style = MaterialTheme.typography.bodyMedium) },
-        supportingContent = {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 10.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
+            Text(def.name, style = MaterialTheme.typography.bodyMedium)
             Text(
                 text = "0x${pid.toString(16).padStart(2, '0').uppercase()}" +
-                       (if (def.unit.isNotBlank()) " · ${def.unit}" else "") +
-                       " · $speed",
+                       (if (def.unit.isNotBlank()) " · ${def.unit}" else ""),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
-        },
-        trailingContent = { Checkbox(checked = checked, onCheckedChange = null) },
-        colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
-        modifier = Modifier.clickable(role = Role.Checkbox, onClickLabel = def.name) { onToggle() }
-    )
+        }
+        SingleChoiceSegmentedButtonRow(modifier = Modifier.width(210.dp)) {
+            SegmentedButton(
+                selected = mode == PidMode.FAST,
+                onClick = { onModeChange(PidMode.FAST) },
+                shape = SegmentedButtonDefaults.itemShape(0, 3),
+                enabled = mode == PidMode.FAST || !fastAtLimit
+            ) { Text("Rápida", maxLines = 1, style = MaterialTheme.typography.labelSmall) }
+            SegmentedButton(
+                selected = mode == PidMode.SLOW,
+                onClick = { onModeChange(PidMode.SLOW) },
+                shape = SegmentedButtonDefaults.itemShape(1, 3)
+            ) { Text("Lenta", maxLines = 1, style = MaterialTheme.typography.labelSmall) }
+            SegmentedButton(
+                selected = mode == PidMode.OFF,
+                onClick = { onModeChange(PidMode.OFF) },
+                shape = SegmentedButtonDefaults.itemShape(2, 3)
+            ) { Text("Off", maxLines = 1, style = MaterialTheme.typography.labelSmall) }
+        }
+    }
 }
