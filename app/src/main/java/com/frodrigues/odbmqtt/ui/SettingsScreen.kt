@@ -27,6 +27,7 @@ import androidx.compose.ui.unit.dp
 import com.frodrigues.odbmqtt.mqtt.testMqttConnection
 import com.frodrigues.odbmqtt.settings.AppConfig
 import com.frodrigues.odbmqtt.settings.AppSettings
+import com.frodrigues.odbmqtt.settings.syncAutoStartToDeStorage
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -428,6 +429,7 @@ fun SettingsScreen(
                             onCheckedChange = { enabled ->
                                 scope.launch {
                                     settings.update { this[AppSettings.AUTO_START] = enabled }
+                                    syncAutoStartToDeStorage(context, enabled)
                                 }
                             }
                         )
@@ -440,7 +442,9 @@ fun SettingsScreen(
                         onClickLabel = "Iniciar automaticamente"
                     ) {
                         scope.launch {
-                            settings.update { this[AppSettings.AUTO_START] = !autoStart }
+                            val newValue = !autoStart
+                            settings.update { this[AppSettings.AUTO_START] = newValue }
+                            syncAutoStartToDeStorage(context, newValue)
                         }
                     }
                 )

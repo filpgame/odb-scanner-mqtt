@@ -35,14 +35,17 @@
 
         <service
             android:name=".service.OBDCollectorService"
+            android:directBootAware="true"
             android:foregroundServiceType="connectedDevice"
             android:exported="false" />
 
         <receiver
             android:name=".BootReceiver"
+            android:directBootAware="true"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.LOCKED_BOOT_COMPLETED" />
             </intent-filter>
         </receiver>
 

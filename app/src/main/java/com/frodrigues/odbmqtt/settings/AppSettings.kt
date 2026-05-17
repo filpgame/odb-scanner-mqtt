@@ -10,6 +10,14 @@ import kotlinx.coroutines.flow.map
 
 val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "app_settings")
 
+fun syncAutoStartToDeStorage(context: Context, enabled: Boolean) {
+    context.createDeviceProtectedStorageContext()
+        .getSharedPreferences(AppSettings.DE_PREFS_NAME, Context.MODE_PRIVATE)
+        .edit()
+        .putBoolean(AppSettings.DE_KEY_AUTO_START, enabled)
+        .apply()
+}
+
 data class AppConfig(
     val btDeviceMac: String,
     val mqttHost: String,
@@ -26,6 +34,9 @@ data class AppConfig(
 class AppSettings(private val dataStore: DataStore<Preferences>) {
 
     companion object {
+        const val DE_PREFS_NAME = "boot_prefs"
+        const val DE_KEY_AUTO_START = "autoStart"
+
         val BT_DEVICE_MAC = stringPreferencesKey("btDeviceMac")
         val MQTT_HOST = stringPreferencesKey("mqttHost")
         val MQTT_PORT = intPreferencesKey("mqttPort")
