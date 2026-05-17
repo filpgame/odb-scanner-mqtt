@@ -19,8 +19,6 @@ import com.frodrigues.odbmqtt.settings.PidMode
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
-private const val FAST_PID_LIMIT = 10
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PidSelectionScreen(
@@ -47,9 +45,9 @@ fun PidSelectionScreen(
         initialized = true
     }
 
-    val fastCount = modes.values.count { it == PidMode.FAST }
-    val slowCount = modes.values.count { it == PidMode.SLOW }
-    val fastAtLimit = fastCount >= FAST_PID_LIMIT
+    val fastCount by remember { derivedStateOf { modes.values.count { it == PidMode.FAST } } }
+    val slowCount by remember { derivedStateOf { modes.values.count { it == PidMode.SLOW } } }
+    val fastAtLimit by remember { derivedStateOf { fastCount >= PidPoller.FAST_PID_LIMIT } }
 
     fun setMode(pid: Int, newMode: PidMode) {
         val currentMode = modes[pid] ?: PidMode.OFF
@@ -70,7 +68,7 @@ fun PidSelectionScreen(
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text(
-                        "Rápida (${PidPoller.FAST_INTERVAL_SECONDS}s) — Limite de $FAST_PID_LIMIT PIDs\n" +
+                        "Rápida (${PidPoller.FAST_INTERVAL_SECONDS}s) — Limite de ${PidPoller.FAST_PID_LIMIT} PIDs\n" +
                         "Valor coletado a cada segundo. Use para dados em tempo real como RPM e velocidade.",
                         style = MaterialTheme.typography.bodyMedium
                     )
@@ -134,15 +132,17 @@ fun PidSelectionScreen(
             return@Scaffold
         }
 
-        val sortedPids = cachedPids.sortedWith(
-            compareBy<Int> {
-                when (modes[it]) {
-                    PidMode.FAST -> 0
-                    PidMode.SLOW -> 1
-                    else -> 2
-                }
-            }.thenBy { PidRegistry.getOrUnknown(it).name }
-        )
+        val sortedPids = remember(cachedPids, modes) {
+            cachedPids.sortedWith(
+                compareBy<Int> {
+                    when (modes[it]) {
+                        PidMode.FAST -> 0
+                        PidMode.SLOW -> 1
+                        else -> 2
+                    }
+                }.thenBy { PidRegistry.getOrUnknown(it).name }
+            )
+        }
 
         Column(
             modifier = Modifier
@@ -168,7 +168,7 @@ fun PidSelectionScreen(
                     Column {
                         Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                             Text(
-                                "Rápida: $fastCount/$FAST_PID_LIMIT",
+                                "Rápida: $fastCount/${PidPoller.FAST_PID_LIMIT}",
                                 style = MaterialTheme.typography.bodyMedium,
                                 fontWeight = FontWeight.Medium,
                                 color = if (fastAtLimit) MaterialTheme.colorScheme.error
@@ -187,7 +187,7 @@ fun PidSelectionScreen(
                         }
                         if (fastAtLimit) {
                             Text(
-                                "Limite de $FAST_PID_LIMIT PIDs rápidos atingido",
+                                "Limite de ${PidPoller.FAST_PID_LIMIT} PIDs rápidos atingido",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.error
                             )

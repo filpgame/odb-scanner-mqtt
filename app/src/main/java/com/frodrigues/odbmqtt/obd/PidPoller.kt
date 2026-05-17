@@ -43,5 +43,6 @@ class PidPoller(
     companion object {
         const val FAST_INTERVAL_SECONDS = 1
         const val SLOW_INTERVAL_SECONDS = 30
+        const val FAST_PID_LIMIT = 10
     }
 }

@@ -62,21 +62,17 @@ class AppSettings(private val dataStore: DataStore<Preferences>) {
     val autoStart: Flow<Boolean> = dataStore.data.map { it[AUTO_START] ?: false }
 
     val fastPids: Flow<Set<Int>> = dataStore.data.map { prefs ->
-        val raw = prefs[FAST_PIDS] ?: return@map DEFAULT_FAST_PIDS
-        if (raw.isBlank()) emptySet()
-        else raw.split(",").mapNotNull { it.trim().toIntOrNull(16) }.toSet()
+        parsePidHexSet(prefs[FAST_PIDS] ?: return@map DEFAULT_FAST_PIDS)
     }
 
     val slowPids: Flow<Set<Int>> = dataStore.data.map { prefs ->
-        val raw = prefs[SLOW_PIDS] ?: return@map DEFAULT_SLOW_PIDS
-        if (raw.isBlank()) emptySet()
-        else raw.split(",").mapNotNull { it.trim().toIntOrNull(16) }.toSet()
+        parsePidHexSet(prefs[SLOW_PIDS] ?: return@map DEFAULT_SLOW_PIDS)
     }
 
     suspend fun savePidModes(fast: Set<Int>, slow: Set<Int>) {
         update {
-            this[FAST_PIDS] = fast.joinToString(",") { it.toString(16).uppercase() }
-            this[SLOW_PIDS] = slow.joinToString(",") { it.toString(16).uppercase() }
+            this[FAST_PIDS] = fast.toPidHexString()
+            this[SLOW_PIDS] = slow.toPidHexString()
         }
     }
 
@@ -101,13 +97,11 @@ class AppSettings(private val dataStore: DataStore<Preferences>) {
     )
 
     val cachedPids: Flow<Set<Int>> = dataStore.data.map { prefs ->
-        val raw = prefs[CACHED_PIDS] ?: ""
-        if (raw.isBlank()) emptySet()
-        else raw.split(",").mapNotNull { it.trim().toIntOrNull(16) }.toSet()
+        parsePidHexSet(prefs[CACHED_PIDS] ?: "")
     }
 
     suspend fun savePidCache(pids: Set<Int>) {
-        update { this[CACHED_PIDS] = pids.joinToString(",") { it.toString(16).uppercase() } }
+        update { this[CACHED_PIDS] = pids.toPidHexString() }
     }
 
     suspend fun clearPidCache() {
@@ -143,4 +137,11 @@ class AppSettings(private val dataStore: DataStore<Preferences>) {
     suspend fun update(block: MutablePreferences.() -> Unit) {
         dataStore.edit { block(it) }
     }
+
+    private fun parsePidHexSet(raw: String): Set<Int> =
+        if (raw.isBlank()) emptySet()
+        else raw.split(",").mapNotNull { it.trim().toIntOrNull(16) }.toSet()
+
+    private fun Set<Int>.toPidHexString(): String =
+        joinToString(",") { it.toString(16).uppercase() }
 }

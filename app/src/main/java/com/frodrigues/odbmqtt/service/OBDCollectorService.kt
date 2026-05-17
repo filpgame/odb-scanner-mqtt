@@ -199,7 +199,6 @@ class OBDCollectorService : LifecycleService() {
         val activeFast = supportedPids.intersect(settings.fastPids.first())
         val activeSlow = supportedPids.intersect(settings.slowPids.first())
 
-        status.value = ServiceStatus.CONNECTED
         updateNotification("Connected — ${activeFast.size} fast (${PidPoller.FAST_INTERVAL_SECONDS}s) + ${activeSlow.size} slow (${PidPoller.SLOW_INTERVAL_SECONDS}s)")
 
         val currentReadings = mutableMapOf<Int, Double>()
